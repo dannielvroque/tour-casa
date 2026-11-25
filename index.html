@@ -59,6 +59,7 @@ body.editing #stage{cursor:crosshair}
 .area:hover+.hs .lb{background:var(--acc);color:#1a1208}
 .area:hover+.hs .dot{transform:scale(1.25)}
 .hs .dot{transition:transform .2s}
+.hs.flip{flex-direction:row-reverse}
 
 /* página inicial: lista de casas */
 #home{position:absolute;inset:0;z-index:30;touch-action:auto;cursor:default;background:var(--bg);overflow:auto;-webkit-user-select:text;user-select:text}
@@ -79,14 +80,33 @@ body.editing #stage{cursor:crosshair}
 #mCv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .m-lbl{position:absolute;left:0;top:0;display:flex;gap:4px;will-change:transform;pointer-events:auto}
 .m-lbl .btn{padding:6px 12px;font-size:12px}
-#mBar{left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:8px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px)}
+#mBar{left:50%;width:max-content;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:8px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px)}
 #mBar .msep{width:1px;height:22px;background:rgba(255,255,255,.25);margin:0 4px}
-#mHint{left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);font-size:12px;color:#20303b;background:rgba(255,255,255,.7);padding:6px 12px;border-radius:99px;text-align:center;max-width:calc(100vw - 24px);pointer-events:none}
-#mPhoto{display:none;left:50%;bottom:calc(122px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--acc);color:#1a1208;font-weight:600}
+#mHint{left:50%;width:max-content;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);font-size:12px;color:#20303b;background:rgba(255,255,255,.7);padding:6px 12px;border-radius:99px;text-align:center;max-width:calc(100vw - 24px);pointer-events:none}
+#mPhoto{display:none;left:50%;width:max-content;max-width:calc(100vw - 24px);bottom:calc(122px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--acc);color:#1a1208;font-weight:600}
 #mPad{display:none;right:14px;bottom:calc(100px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,46px);grid-template-rows:repeat(2,46px);gap:6px}
 #mPad .btn{padding:0;font-size:16px}
 #mPad .u{grid-column:2;grid-row:1}#mPad .l{grid-column:1;grid-row:2}#mPad .d{grid-column:2;grid-row:2}#mPad .r{grid-column:3;grid-row:2}
-@media(max-width:640px){#menu{margin-left:0;width:100%;justify-content:flex-start}.btn{padding:8px 12px;font-size:12px}}
+@media(max-width:640px){
+  #top{left:10px;right:10px;top:calc(8px + env(safe-area-inset-top));gap:5px}
+  .btn{padding:5px 10px;font-size:11px;letter-spacing:.02em}
+  #bFull{display:none}                                   /* iPhone não tem tela cheia para páginas */
+  #menu{margin-left:0;width:100%;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:5px;padding-bottom:2px}
+  #menu::-webkit-scrollbar{display:none}#menu .btn{flex:none;white-space:nowrap}
+  .hs{padding:4px;gap:6px;--dc:12px}
+  .hs .dot{width:16px;height:16px;border-width:2px}
+  .hs .lb{font-size:10px;padding:4px 8px;letter-spacing:.06em}
+  #info{left:10px;bottom:calc(10px + env(safe-area-inset-bottom));max-width:calc(100vw - 20px);padding:10px 14px;border-radius:12px}
+  #info small{font-size:9px;margin-bottom:3px}#info h2{font-size:20px}#info p{font-size:12px;margin-top:5px;line-height:1.4}
+  #mBar{bottom:calc(10px + env(safe-area-inset-bottom));padding:5px;gap:4px;border-radius:12px}
+  #mBar .btn{padding:5px 9px;font-size:11px}#mBar .msep{margin:0 2px;height:16px}
+  #mHint{bottom:calc(58px + env(safe-area-inset-bottom));font-size:10px;padding:4px 10px}
+  #mPhoto{bottom:calc(86px + env(safe-area-inset-bottom));font-size:11px;padding:6px 12px}
+  #mPad{right:10px;bottom:calc(84px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,38px);grid-template-rows:repeat(2,38px);gap:4px}
+  #mPad .btn{font-size:13px}
+  .m-lbl .btn{padding:4px 8px;font-size:10px}
+  #toast{font-size:11px;padding:7px 12px;white-space:normal;max-width:calc(100vw - 24px);text-align:center}
+}
 </style>
 </head>
 <body>
@@ -298,7 +318,9 @@ function makeHs(layer,pts){
 function place(o,x,y,show){
   o.px=x;o.py=y;
   if(!show){o.el.style.display='none';return;}
-  o.el.style.display='';o.el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-17px,-50%)`;
+  const flip=x>W*.6;                      // perto da borda direita: o rótulo vai para a esquerda do ponto
+  o.el.classList.toggle('flip',flip);
+  o.el.style.display='';o.el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(${flip?'calc(-100% + var(--dc,17px))':'calc(-1 * var(--dc,17px))'},-50%)`;
 }
 
 /* ---------- layout ---------- */
@@ -408,7 +430,7 @@ function setInfo(room){
   },250);
 }
 function setNav(){
-  $('#bFach').hidden=!(HAS_F&&(cur||inMaq));$('#bMaq').hidden=inMaq;
+  $('#bFach').hidden=!(HAS_F&&(cur||inMaq));$('#bMaq').hidden=inMaq||!TOUR.casa3d;
   const bp=$('#bPrev');bp.hidden=!(cur&&prev&&prev!==cur);
   if(!bp.hidden)bp.textContent='← '+TOUR.comodos[prev].nome;
   document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===cur));
@@ -557,7 +579,8 @@ function showHome(list,id,msg){
   }
 }
 async function boot(){
-  const list=typeof CASAS!=='undefined'?CASAS:[],id=new URLSearchParams(location.search).get('casa');
+  try{await loadScript('casas/locais.js');}catch(_){}          // opcional: casas só deste computador
+  const list=[...(typeof CASAS!=='undefined'?CASAS:[]),...(typeof CASAS_LOCAIS!=='undefined'?CASAS_LOCAIS:[])],id=new URLSearchParams(location.search).get('casa');
   let entry=list.find(c=>c.id===id);
   if(!entry&&!id&&list.length===1)entry=list[0];
   if(!entry){showHome(list,id);return;}

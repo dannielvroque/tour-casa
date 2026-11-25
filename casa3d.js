@@ -253,7 +253,10 @@ function syncUI(){
   if(!ui.bar)return;
   ui.bOrb.classList.toggle('cur',mode==='orbit');ui.bWalk.classList.toggle('cur',mode==='walk'||mode==='fly'&&false);
   ui.fl.forEach((b,i)=>b.classList.toggle('cur',i===fl));
-  ui.hint.textContent=mode==='walk'?'WASD ou setas para andar · arraste para olhar ao redor · Esc sai':'Arraste para girar · roda do mouse para zoom · clique num cômodo para entrar';
+  const touch=matchMedia('(pointer:coarse)').matches;
+  ui.hint.textContent=mode==='walk'
+    ?(touch?'Use as setas para andar · arraste para olhar':'WASD ou setas para andar · arraste para olhar ao redor · Esc sai')
+    :(touch?'Arraste para girar · pinça para zoom · toque num cômodo':'Arraste para girar · roda do mouse para zoom · clique num cômodo para entrar');
   const has=mode==='walk'&&curRoom&&opts.has(curRoom.id);
   ui.photo.style.display=has?'block':'none';if(has)ui.photo.textContent='📷 Ver fotos 360° · '+(curRoom.nome||curRoom.id);
   ui.pad.style.display=mode==='walk'?'grid':'none';
