@@ -11,6 +11,12 @@ from pathlib import Path
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
+try:                                   # fotos de iPhone (.heic): pip install pillow-heif
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pillow_heif = None
+from PIL import ImageOps
 
 
 def main():
@@ -19,18 +25,21 @@ def main():
     pasta = Path(sys.argv[1])
     total_antes = total_depois = 0
     for f in sorted(pasta.iterdir()):
-        if f.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+        if f.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
             continue
+        if f.suffix.lower() == ".heic" and not pillow_heif:
+            print(f"{f.name}: instale pillow-heif para ler HEIC"); continue
         antes = f.stat().st_size
-        im = Image.open(f).convert("RGB")
+        im = ImageOps.exif_transpose(Image.open(f)).convert("RGB")
         w, h = im.size
-        limite = 4096 if abs(w / h - 2) < 0.05 else 2000
+        # 2:1 = 360°; mais larga que 1,7:1 = panorâmica do celular (tipo 'cil'); o resto = foto comum
+        limite = 4096 if abs(w / h - 2) < 0.05 else (6144 if w / h > 1.7 else 2400)
         if w > limite:
             im = im.resize((limite, round(h * limite / w)), Image.LANCZOS)
         destino = f.with_suffix(".jpg")
         im.save(destino, quality=84, optimize=True)
-        if destino != f:
-            f.unlink()
+        if destino != f and f.suffix.lower() in (".png", ".webp"):
+            f.unlink()                 # HEIC original é mantido (fica fora do git pelo .gitignore)
         depois = destino.stat().st_size
         total_antes += antes
         total_depois += depois

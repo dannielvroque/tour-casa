@@ -36,12 +36,15 @@ html,body{height:100%;background:var(--bg);color:var(--ink);font-family:"Segoe U
 /* interface */
 .ui{position:absolute;z-index:5}
 .glass{background:rgba(14,12,14,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);border-radius:16px}
-#top{left:16px;right:16px;top:calc(14px + env(safe-area-inset-top));display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+#top{left:16px;right:16px;top:calc(14px + env(safe-area-inset-top));display:flex;gap:8px;align-items:center;flex-wrap:nowrap;pointer-events:none}
 #top>*{pointer-events:auto}
 .btn{border:1px solid rgba(255,255,255,.16);background:rgba(14,12,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--ink);padding:9px 14px;border-radius:99px;font:inherit;font-size:13px;letter-spacing:.04em;cursor:pointer;transition:background .2s,color .2s,opacity .3s}
 .btn:hover{background:var(--acc);color:#1a1208}
 .btn[hidden]{display:none}
-#menu{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#menu{margin-left:auto;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;min-width:0;max-width:min(100%,760px);flex:0 1 auto;
+  -webkit-mask-image:linear-gradient(90deg,#000 90%,transparent);mask-image:linear-gradient(90deg,#000 90%,transparent);padding-right:24px}
+#menu::-webkit-scrollbar{display:none}
+#menu .btn,#top>.btn{flex:none;white-space:nowrap}
 .btn.cur{background:var(--ink);color:#15110a}
 #info{left:16px;bottom:calc(18px + env(safe-area-inset-bottom));max-width:min(440px,calc(100vw - 32px));padding:18px 22px;opacity:0;transform:translateY(8px);transition:opacity .6s .2s,transform .6s .2s;pointer-events:none}
 #info.on{opacity:1;transform:none}
@@ -90,7 +93,8 @@ body.editing #stage{cursor:crosshair}
 #mPad .btn{padding:0;font-size:16px}
 #mPad .u{grid-column:2;grid-row:1}#mPad .l{grid-column:1;grid-row:2}#mPad .d{grid-column:2;grid-row:2}#mPad .r{grid-column:3;grid-row:2}
 @media(max-width:640px){
-  #top{left:10px;right:10px;top:calc(8px + env(safe-area-inset-top));gap:5px}
+  #top{left:10px;right:10px;top:calc(8px + env(safe-area-inset-top));gap:5px;flex-wrap:wrap}
+  #menu{max-width:100%;-webkit-mask-image:none;mask-image:none;padding-right:0}
   .btn{padding:5px 10px;font-size:11px;letter-spacing:.02em}
   #bFull{display:none}                                   /* iPhone não tem tela cheia para páginas */
   #menu{margin-left:0;width:100%;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:5px;padding-bottom:2px}
@@ -149,6 +153,10 @@ const stage=$('#stage'),fachada=$('#fachada'),fachCv=$('#fachCv'),roomEl=$('#roo
       fachHs=$('#fachHs'),roomHs=$('#roomHs'),fade=$('#fade'),info=$('#info'),toast=$('#toast');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const D2R=Math.PI/180;
+/* tipos de cômodo: 'pano' = 360° | 'cil' = panorama parcial (modo Panorama do celular) | 'foto' = foto comum */
+const isGL=r=>r.tipo==='pano'||r.tipo==='cil';
+const cilVF=r=>(r.vfov||65)*D2R;                                            // altura (graus) que a panorâmica cobre
+const cilHF=(r,a)=>r.hfov?r.hfov*D2R:(a.w/a.h)*2*Math.tan(cilVF(r)/2);      // largura (graus) calculada pela proporção
 let BASE='',HAS_F=true;      // BASE = pasta (ou endereço) das fotos da casa aberta
 
 /* ---------- estado ---------- */
@@ -248,7 +256,7 @@ function initGL(){
 void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`));
   gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,`#version 300 es
 precision highp float;
-uniform vec2 uRes;uniform float uYaw,uPitch,uT;uniform sampler2D uTex;
+uniform vec2 uRes;uniform float uYaw,uPitch,uT,uMode,uHF,uVT;uniform sampler2D uTex;
 out vec4 o;
 void main(){
   vec2 p=gl_FragCoord.xy/uRes*2.-1.;p.x*=uRes.x/uRes.y;
@@ -259,22 +267,27 @@ void main(){
   d=vec3(d.x*cy-d.z*sy,d.y,d.x*sy+d.z*cy);
   float u=atan(d.x,-d.z)/6.2831853+.5;
   float v=asin(clamp(d.y,-1.,1.))/3.1415927+.5;
+  if(uMode>.5){                                  // panorama parcial: projeção cilíndrica
+    float r=max(length(d.xz),1e-4);
+    u=atan(d.x,-d.z)/uHF+.5;v=.5+(d.y/r)/(2.*uVT);
+    if(u<0.||u>1.||v<0.||v>1.){o=vec4(.05,.045,.05,1.);return;}
+  }
   o=vec4(texture(uTex,vec2(u,v)).rgb,1.);
 }`));
   gl.linkProgram(prog);
   if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
-  for(const n of ['uRes','uYaw','uPitch','uT','uTex'])U[n]=gl.getUniformLocation(prog,n);
+  for(const n of ['uRes','uYaw','uPitch','uT','uTex','uMode','uHF','uVT'])U[n]=gl.getUniformLocation(prog,n);
   maxTex=gl.getParameter(gl.MAX_TEXTURE_SIZE);
   return true;
 }
-function panoTexture(a){
+function panoTexture(a,clamp){
   if(a.tex)return a.tex;
   let im=a.im,w=a.w,h=a.h;
   if(w>maxTex||h>maxTex){const k=Math.min(maxTex/w,maxTex/h),c=document.createElement('canvas');c.width=Math.floor(w*k);c.height=Math.floor(h*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);im=c;}
   const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);   // pode lançar SecurityError em file://
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,clamp?gl.CLAMP_TO_EDGE:gl.REPEAT);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
@@ -353,15 +366,23 @@ function frame(t){
   }
   if(!cur||!asset)return;
   const room=TOUR.comodos[cur];
-  if(room.tipo==='pano'){
+  if(isGL(room)){
     if(!dragging){V.yaw+=V.vy*dt;V.pitch+=V.vp*dt;V.vy*=Math.pow(.02,dt);V.vp*=Math.pow(.02,dt);
-      if(!idleStop&&Math.abs(V.vy)<.02)V.yaw+=.012*dt;}
+      if(!idleStop&&room.tipo!=='cil'&&Math.abs(V.vy)<.02)V.yaw+=.012*dt;}
     V.pitch=Math.max(-85*D2R,Math.min(85*D2R,V.pitch));
     V.fov+=(V.fovT-V.fov)*Math.min(1,dt*3.2);
+    const cil=room.tipo==='cil',vf=cil?cilVF(room):0,hf=cil?cilHF(room,asset):0;
+    if(cil){                                       // panorama parcial: a câmera para nas bordas da foto
+      const mf=vf/D2R*.95;V.fovT=Math.min(V.fovT,mf);V.fov=Math.min(V.fov,Math.max(mf,40));
+      const hv=Math.min(V.fov,mf)*D2R/2,lp=Math.max(0,vf/2-hv),hh=Math.atan(Math.tan(hv)*W/H),ly=Math.max(0,hf/2-hh);
+      if(V.pitch>lp||V.pitch<-lp){V.pitch=Math.max(-lp,Math.min(lp,V.pitch));V.vp=0;}
+      if(V.yaw>ly||V.yaw<-ly){V.yaw=Math.max(-ly,Math.min(ly,V.yaw));V.vy=0;}
+    }
     gl.viewport(0,0,glCv.width,glCv.height);gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,panoTexture(asset));
     gl.uniform1i(U.uTex,0);gl.uniform2f(U.uRes,glCv.width,glCv.height);
     gl.uniform1f(U.uYaw,V.yaw);gl.uniform1f(U.uPitch,V.pitch);gl.uniform1f(U.uT,Math.tan(V.fov*D2R/2));
+    gl.uniform1f(U.uMode,cil?1:0);gl.uniform1f(U.uHF,cil?hf:1);gl.uniform1f(U.uVT,cil?Math.tan(vf/2):1);
     gl.drawArrays(gl.TRIANGLES,0,3);
     for(const o of hsList){const q=projPano(o.p.yaw,o.p.pitch);place(o,q?q[0]:0,q?q[1]:0,!!q&&q[0]>-80&&q[0]<W+80&&q[1]>-80&&q[1]<H+80);}
   }else{
@@ -398,14 +419,14 @@ stage.addEventListener('pointermove',e=>{
   if(ptrs.size===2&&cur){
     const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
     if(pinch0){const f=pinch0/d;
-      if(TOUR.comodos[cur].tipo==='pano'){V.fov=V.fovT=Math.max(35,Math.min(95,V.fov*f));}
+      if(isGL(TOUR.comodos[cur])){V.fov=V.fovT=Math.max(35,Math.min(95,V.fov*f));}
       else{V.zoom=V.zoomT=Math.max(minZ(),Math.min(3,V.zoom/f));}}
     pinch0=d;moved+=10;lx=e.clientX;ly=e.clientY;return;
   }
   if(!dragging)return;
   const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
   if(!cur)return;
-  if(TOUR.comodos[cur].tipo==='pano'){
+  if(isGL(TOUR.comodos[cur])){
     const k=V.fov*D2R/H;V.yaw-=dx*k;V.pitch+=dy*k;V.vy=-dx*k*60;V.vp=dy*k*60;
   }else if(asset){
     const c=cover(asset.w,asset.h,V.zoom,0,0),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
@@ -419,15 +440,17 @@ function endDrag(e){
 }
 stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
 stage.addEventListener('wheel',e=>{
+  const mn=e.target.closest('#menu');                    // roda do mouse sobre o menu: rola os ambientes para o lado
+  if(mn){mn.scrollLeft+=e.deltaY+e.deltaX;e.preventDefault();return;}
   if(!cur)return;e.preventDefault();
-  if(TOUR.comodos[cur].tipo==='pano')V.fovT=Math.max(35,Math.min(95,V.fovT*(1+e.deltaY*.001)));
+  if(isGL(TOUR.comodos[cur]))V.fovT=Math.max(35,Math.min(95,V.fovT*(1+e.deltaY*.001)));
   else V.zoomT=Math.max(minZ(),Math.min(3,V.zoomT*(1-e.deltaY*.001)));
 },{passive:false});
 addEventListener('keydown',e=>{
   if(e.key==='Escape'){back();return;}
   if(e.key==='e'||e.key==='E'){editMode=!editMode;document.body.classList.toggle('editing',editMode);say(editMode?'Modo edição ligado':'Modo edição desligado');return;}
   if(!cur)return;
-  const s=TOUR.comodos[cur].tipo==='pano',k=.08;
+  const s=isGL(TOUR.comodos[cur]),k=.08;
   if(e.key==='ArrowLeft'){s?V.yaw-=k:V.panx+=.1;}
   if(e.key==='ArrowRight'){s?V.yaw+=k:V.panx-=.1;}
   if(e.key==='ArrowUp'){s?V.pitch+=k:V.pany+=.1;}
@@ -440,7 +463,7 @@ function say(s,ms=3500){toast.textContent=s;toast.classList.add('on');clearTimeo
 function editClick(px,py){
   let s;
   if(!cur&&fachAsset){const c=cover(fachAsset.w,fachAsset.h,1,0,0,fachMode());s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
-  else if(cur&&TOUR.comodos[cur].tipo==='pano'){const r=unprojPano(px,py);s=`yaw: ${r.yaw.toFixed(0)}, pitch: ${r.pitch.toFixed(0)}`;}
+  else if(cur&&isGL(TOUR.comodos[cur])){const r=unprojPano(px,py);s=`yaw: ${r.yaw.toFixed(0)}, pitch: ${r.pitch.toFixed(0)}`;}
   else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
   if(s){say(s,6000);console.log('[ponto]',s);try{navigator.clipboard.writeText(s)}catch(_){}}
 }
@@ -460,11 +483,13 @@ function setNav(){
   const bp=$('#bPrev');bp.hidden=!(cur&&prev&&prev!==cur);
   if(!bp.hidden)bp.textContent='← '+TOUR.comodos[prev].nome;
   document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===cur));
+  const cb=document.querySelector('#menu .btn.cur'),mn=$('#menu');      // mantém o ambiente atual visível no menu
+  if(cb&&mn)mn.scrollTo({left:cb.offsetLeft-mn.clientWidth/2+cb.offsetWidth/2,behavior:'smooth'});
 }
 async function prepare(id){
   const room=TOUR.comodos[id];
-  const a=await getAsset('r:'+id,room.img,c=>room.tipo==='pano'?drawPanoPH(c,id):drawFotoPH(c,id));
-  if(room.tipo==='pano'){try{panoTexture(a);}catch(err){a.tex=null;fail(err);throw err;}}
+  const a=await getAsset('r:'+id,room.img,c=>isGL(room)?drawPanoPH(c,id):drawFotoPH(c,id));
+  if(isGL(room)){try{panoTexture(a,room.tipo==='cil');}catch(err){a.tex=null;fail(err);throw err;}}
   return a;
 }
 function fail(err){
@@ -474,11 +499,11 @@ function fail(err){
 function showRoom(id,a,arrYaw){
   const room=TOUR.comodos[id];
   asset=a;cur=id;
-  glCv.style.display=room.tipo==='pano'?'block':'none';
-  fotoCv.style.display=room.tipo==='pano'?'none':'block';
+  glCv.style.display=isGL(room)?'block':'none';
+  fotoCv.style.display=isGL(room)?'none':'block';
   hsList=makeHs(roomHs,room.pontos);
   idleStop=false;V.vy=V.vp=V.vx=V.vyy=0;
-  if(room.tipo==='pano'){V.yaw=(arrYaw!=null?arrYaw:(room.yaw||0))*D2R;V.pitch=0;easeFov();}
+  if(isGL(room)){V.yaw=(arrYaw!=null?arrYaw:(room.yaw||0))*D2R;V.pitch=0;easeFov();if(room.tipo==='cil')V.fovT=Math.min(75,(room.vfov||65)*.92);}
   else{V.panx=0;V.pany=0;V.zoom=1.2;V.zoomT=1;}
   roomEl.classList.add('on');setInfo(room);setNav();
 }
@@ -500,7 +525,7 @@ async function goRoom(id){
       await wait(60);fade.classList.remove('on');
     }else{                                              // cômodo → cômodo: "caminha" até a porta e entra
       info.classList.remove('on');
-      const room=TOUR.comodos[from],pt=room.tipo==='pano'?room.pontos.find(q=>q.para===id&&q.yaw!=null):null;
+      const room=TOUR.comodos[from],pt=isGL(room)?room.pontos.find(q=>q.para===id&&q.yaw!=null):null;
       if(pt){
         dragging=false;V.vy=V.vp=0;idleStop=true;
         const y0=V.yaw,tg=pt.yaw*D2R,dy=((tg-y0+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
@@ -509,7 +534,7 @@ async function goRoom(id){
           const k=Math.max(0,Math.min(1,(now-t0)/950)),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
           V.yaw=y0+dy*e;V.pitch=p0+(tp-p0)*e;V.fov=f0+(40-f0)*e;V.fovT=V.fov;
           if(k>.62)fade.classList.add('on');
-          if(k<1)requestAnimationFrame(step);else res();})(t0);});
+          if(k<1){if(document.hidden)setTimeout(()=>step(performance.now()),16);else requestAnimationFrame(step);}else res();})(t0);});
         const [a]=await Promise.all([p,wait(200)]);
         prev=from;showRoom(id,a,arrivalYaw(from,id));
       }else{

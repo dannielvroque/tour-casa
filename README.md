@@ -26,6 +26,9 @@ Cria `casas/praia/` a partir do modelo e registra em `casas/casas.js`. Depois:
 1. Ponha as fotos em `casas/praia/fotos/` e rode `python tools/otimizar_fotos.py casas/praia/fotos`
    (reduz panoramas para 4096 px e as demais para 2000 px; precisa de `pip install pillow`).
 2. Edite `casas/praia/config.js`: nomes de arquivo (`img`), textos, `tipo` de cada cômodo e os pontos.
+   Tipos: `'pano'` = 360° (2:1) · `'cil'` = panorâmica do modo Panorama do celular (gira dentro da faixa
+   fotografada e para nas bordas; ajuste fino opcional com `vfov`/`hfov` em graus) · `'foto'` = foto comum.
+   Fotos HEIC do iPhone: `pip install pillow-heif`; os originais .heic ficam fora do git.
 3. Sem foto de fachada? Apague o bloco `fachada`: o tour começa direto no primeiro cômodo.
    Sem maquete? Apague o bloco `casa3d`.
 

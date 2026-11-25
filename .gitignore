@@ -4,3 +4,7 @@
 # casas de teste com fotos de terceiros: nao publicar
 /casas/capao-teste/
 /casas/locais.js
+
+# originais grandes (HEIC do celular): ficam so no computador
+*.heic
+*.HEIC
