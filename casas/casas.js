@@ -1,0 +1,9 @@
+/* Lista das casas. Uma por linha. Use  python tools/nova_casa.py <id> "Nome"  para acrescentar.
+   id        = nome da pasta em casas/ e valor de ?casa=
+   capa      = foto de capa (caminho dentro da pasta da casa)
+   base      = (opcional) endereço de outro lugar onde ficam as fotos, ex.: 'https://cdn.seudominio.com/casas/minha-casa/'
+               (o servidor precisa liberar CORS, senão os panoramas 360° não carregam) */
+const CASAS=[
+  { id: 'minha-casa', nome: 'Casa de exemplo', descricao: 'Sobrado com sala, cozinha, quarto e banheiro. Fotos de exemplo (CC0).', capa: 'fotos/fachada.jpg' },
+  { id: "praia", nome: "Casa de Praia", descricao: "Segunda casa de teste, sem fachada.", capa: 'fotos/fachada.jpg' },
+];

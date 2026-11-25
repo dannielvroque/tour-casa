@@ -53,6 +53,39 @@ html,body{height:100%;background:var(--bg);color:var(--ink);font-family:"Segoe U
 #edit{right:16px;bottom:calc(18px + env(safe-area-inset-bottom));font-size:12px;color:var(--mut);padding:8px 12px;display:none}
 body.editing #edit{display:block}
 body.editing #stage{cursor:crosshair}
+/* áreas da fachada que acendem ao passar o mouse */
+.area{position:absolute;left:0;top:0;border:2px solid rgba(233,184,114,0);border-radius:10px;background:rgba(233,184,114,0);cursor:pointer;pointer-events:auto;transition:background .25s,border-color .25s,box-shadow .25s}
+.area:hover{background:rgba(233,184,114,.30);border-color:rgba(233,184,114,.95);box-shadow:0 0 28px 6px rgba(233,184,114,.55)}
+.area:hover+.hs .lb{background:var(--acc);color:#1a1208}
+.area:hover+.hs .dot{transform:scale(1.25)}
+.hs .dot{transition:transform .2s}
+
+/* página inicial: lista de casas */
+#home{position:absolute;inset:0;z-index:30;background:var(--bg);overflow:auto;-webkit-user-select:text;user-select:text}
+#home[hidden]{display:none}
+.hwrap{max-width:1080px;margin:0 auto;padding:calc(40px + env(safe-area-inset-top)) 20px 60px}
+.hwrap h1{font-weight:300;font-size:clamp(30px,6vw,52px);letter-spacing:-.02em}
+.hwrap>p{color:var(--mut);margin:8px 0 28px}
+#hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{display:block;color:inherit;text-decoration:none;border:1px solid rgba(255,255,255,.12);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.04);transition:transform .25s,border-color .25s}
+.card:hover{transform:translateY(-3px);border-color:var(--acc)}
+.card .cover{aspect-ratio:16/10;background:#241f1a center/cover no-repeat}
+.card h3{font-weight:500;font-size:18px;padding:14px 16px 4px}
+.card p{color:var(--mut);font-size:13px;line-height:1.45;padding:0 16px 16px}
+
+/* maquete 3D */
+#maq{opacity:0;visibility:hidden;transition:opacity .6s ease;background:#c7dbea;z-index:3}
+#maq.on{opacity:1;visibility:visible}
+#mCv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.m-lbl{position:absolute;left:0;top:0;display:flex;gap:4px;will-change:transform;pointer-events:auto}
+.m-lbl .btn{padding:6px 12px;font-size:12px}
+#mBar{left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:8px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px)}
+#mBar .msep{width:1px;height:22px;background:rgba(255,255,255,.25);margin:0 4px}
+#mHint{left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);font-size:12px;color:#20303b;background:rgba(255,255,255,.7);padding:6px 12px;border-radius:99px;text-align:center;max-width:calc(100vw - 24px);pointer-events:none}
+#mPhoto{display:none;left:50%;bottom:calc(122px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--acc);color:#1a1208;font-weight:600}
+#mPad{display:none;right:14px;bottom:calc(100px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,46px);grid-template-rows:repeat(2,46px);gap:6px}
+#mPad .btn{padding:0;font-size:16px}
+#mPad .u{grid-column:2;grid-row:1}#mPad .l{grid-column:1;grid-row:2}#mPad .d{grid-column:2;grid-row:2}#mPad .r{grid-column:3;grid-row:2}
 @media(max-width:640px){#menu{margin-left:0;width:100%;justify-content:flex-start}.btn{padding:8px 12px;font-size:12px}}
 </style>
 </head>
@@ -67,20 +100,25 @@ body.editing #stage{cursor:crosshair}
     <canvas id="fachCv"></canvas>
     <div id="fachHs" class="layer" style="pointer-events:none"></div>
   </div>
+  <div id="maq" class="layer"></div>
   <div id="fade"></div>
 
   <div id="top" class="ui">
+    <a class="btn" id="bHome" href="./" hidden style="text-decoration:none">☰ Casas</a>
     <button class="btn" id="bFach" hidden>⌂ Fachada</button>
+    <button class="btn" id="bMaq">⬒ Maquete 3D</button>
     <button class="btn" id="bPrev" hidden></button>
     <div id="menu"></div>
     <button class="btn" id="bFull" title="Tela cheia">⛶</button>
   </div>
   <div id="info" class="ui glass"><small></small><h2></h2><p></p></div>
   <div id="toast" class="ui glass"></div>
+  <div id="home" hidden><div class="hwrap"><h1>Tours de casas</h1><p id="hmsg"></p><div id="hgrid"></div></div></div>
   <div id="edit" class="ui glass">Modo edição: clique para ver as coordenadas · E para sair</div>
 </div>
 
-<script src="config.js"></script>
+<script src="casas/casas.js"></script>
+<script src="casa3d.js"></script>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -88,13 +126,13 @@ const stage=$('#stage'),fachada=$('#fachada'),fachCv=$('#fachCv'),roomEl=$('#roo
       fachHs=$('#fachHs'),roomHs=$('#roomHs'),fade=$('#fade'),info=$('#info'),toast=$('#toast');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const D2R=Math.PI/180;
-document.title=TOUR.titulo;
+let BASE='',HAS_F=true;      // BASE = pasta (ou endereço) das fotos da casa aberta
 
 /* ---------- estado ---------- */
 let W=0,H=0,dpr=1;
 let cur=null;            // id do cômodo atual (null = fachada)
 let prev=null;           // cômodo de onde viemos
-let busy=false, editMode=false;
+let busy=false, editMode=false, inMaq=false;
 let lastOrigin={px:innerWidth/2,py:innerHeight/2};
 const V={yaw:0,pitch:0,fov:75,fovT:75,vy:0,vp:0,panx:0,pany:0,zoom:1.15,zoomT:1.15,vx:0,vyy:0};
 let asset=null;          // imagem do cômodo atual
@@ -104,7 +142,7 @@ let fachList=[];
 const cache={};
 
 /* ---------- imagens (ou exemplos desenhados) ---------- */
-function loadImg(src){return new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});}
+function loadImg(src){return new Promise(res=>{if(!src)return res(null);const im=new Image();im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=()=>res(null);im.src=/^(https?:)?\/\//.test(src)?src:BASE+src;});}
 async function getAsset(key,src,drawPH){
   if(cache[key])return cache[key];
   let im=await loadImg(src),real=!!im;
@@ -246,10 +284,14 @@ function unprojPano(px,py){
 function makeHs(layer,pts){
   layer.innerHTML='';
   return pts.map(p=>{
+    const o={p,px:0,py:0};
+    const act=e=>{e.stopPropagation();if(editMode){editClick(e.clientX,e.clientY);return;}if(moved>6)return;lastOrigin={px:o.px,py:o.py};goRoom(p.para);};
+    if(p.area){                                   // área retangular que acende ao passar o mouse
+      const a=document.createElement('div');a.className='area';a.addEventListener('click',act);layer.appendChild(a);o.area=a;
+    }
     const el=document.createElement('button');el.className='hs';el.style.pointerEvents='auto';
     el.innerHTML=`<span class="dot"></span><span class="lb"></span>`;el.querySelector('.lb').textContent=p.rotulo||TOUR.comodos[p.para].nome;
-    const o={el,p,px:0,py:0};
-    el.addEventListener('click',e=>{e.stopPropagation();if(editMode||moved>6)return;lastOrigin={px:o.px,py:o.py};goRoom(p.para);});
+    o.el=el;el.addEventListener('click',act);
     layer.appendChild(el);return o;
   });
 }
@@ -274,7 +316,12 @@ function frame(t){
   if(!W)return;
   if(!fachada.classList.contains('gone')&&fachAsset){          // fachada
     const c=cover(fachAsset.w,fachAsset.h,1,0,0);
-    for(const o of fachList)place(o,c.ox+o.p.x*c.dw,c.oy+o.p.y*c.dh,true);
+    for(const o of fachList){
+      const A=o.p.area;
+      if(A){o.area.style.transform=`translate(${(c.ox+A[0]*c.dw).toFixed(1)}px,${(c.oy+A[1]*c.dh).toFixed(1)}px)`;o.area.style.width=((A[2]-A[0])*c.dw).toFixed(1)+'px';o.area.style.height=((A[3]-A[1])*c.dh).toFixed(1)+'px';}
+      const cx=A?(A[0]+A[2])/2:o.p.x,cy=A?(A[1]+A[3])/2:o.p.y;
+      place(o,c.ox+cx*c.dw,c.oy+cy*c.dh,true);
+    }
   }
   if(!cur||!asset)return;
   const room=TOUR.comodos[cur];
@@ -304,7 +351,7 @@ function frame(t){
 let dragging=false,moved=0,lx=0,ly=0,idleStop=false,downX=0,downY=0;
 stage.addEventListener('pointerdown',e=>{
   moved=0;                                   // zera sempre, senão um arrasto antigo bloqueia os pontos
-  if(e.target.closest('.ui,.hs'))return;
+  if(inMaq||e.target.closest('.ui,.hs,.area'))return;
   dragging=true;moved=0;lx=downX=e.clientX;ly=downY=e.clientY;idleStop=true;stage.classList.add('drag');stage.setPointerCapture(e.pointerId);
 });
 stage.addEventListener('pointermove',e=>{
@@ -351,7 +398,7 @@ function editClick(px,py){
 }
 
 /* ---------- navegação ---------- */
-function easeFov(){V.fov=48;V.fovT=75;}
+function easeFov(){V.fov=40;V.fovT=75;}
 function setInfo(room){
   info.classList.remove('on');
   setTimeout(()=>{
@@ -361,7 +408,7 @@ function setInfo(room){
   },250);
 }
 function setNav(){
-  $('#bFach').hidden=!cur;
+  $('#bFach').hidden=!(HAS_F&&(cur||inMaq));$('#bMaq').hidden=inMaq;
   const bp=$('#bPrev');bp.hidden=!(cur&&prev&&prev!==cur);
   if(!bp.hidden)bp.textContent='← '+TOUR.comodos[prev].nome;
   document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===cur));
@@ -376,14 +423,14 @@ function fail(err){
   console.error(err);
   say('Não foi possível usar a foto no 3D. Abra o site por um servidor (iniciar.bat), não direto pelo arquivo.',9000);
 }
-function showRoom(id,a){
+function showRoom(id,a,arrYaw){
   const room=TOUR.comodos[id];
   asset=a;cur=id;
   glCv.style.display=room.tipo==='pano'?'block':'none';
   fotoCv.style.display=room.tipo==='pano'?'none':'block';
   hsList=makeHs(roomHs,room.pontos);
   idleStop=false;V.vy=V.vp=V.vx=V.vyy=0;
-  if(room.tipo==='pano'){V.yaw=(room.yaw||0)*D2R;V.pitch=0;easeFov();}
+  if(room.tipo==='pano'){V.yaw=(arrYaw!=null?arrYaw:(room.yaw||0))*D2R;V.pitch=0;easeFov();}
   else{V.panx=0;V.pany=0;V.zoom=1.5;V.zoomT=1.15;}
   roomEl.classList.add('on');setInfo(room);setNav();
 }
@@ -391,23 +438,70 @@ async function goRoom(id){
   if(busy||!TOUR.comodos[id])return;busy=true;
   try{
     const from=cur,p=prepare(id);
-    if(from===null){                                    // fachada → cômodo: voo até a janela
+    if(from===null&&!inMaq){                            // fachada → cômodo: voo até a janela
       fachada.style.transformOrigin=`${lastOrigin.px}px ${lastOrigin.py}px`;
       fachada.classList.add('in');info.classList.remove('on');
       const [a]=await Promise.all([p,wait(650)]);
       prev=null;showRoom(id,a);
       await wait(700);fachada.classList.add('gone');
-    }else{                                              // cômodo → cômodo: escurece e troca
-      fade.classList.add('on');info.classList.remove('on');
+    }else if(from===null){                              // maquete → fotos do cômodo
+      fade.classList.add('on');
       const [a]=await Promise.all([p,wait(450)]);
-      prev=from;showRoom(id,a);
+      Casa3D.close();inMaq=false;$('#maq').classList.remove('on');
+      prev=null;showRoom(id,a,arrivalYaw(null,id));
+      await wait(60);fade.classList.remove('on');
+    }else{                                              // cômodo → cômodo: "caminha" até a porta e entra
+      info.classList.remove('on');
+      const room=TOUR.comodos[from],pt=room.tipo==='pano'?room.pontos.find(q=>q.para===id&&q.yaw!=null):null;
+      if(pt){
+        dragging=false;V.vy=V.vp=0;idleStop=true;
+        const y0=V.yaw,tg=pt.yaw*D2R,dy=((tg-y0+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+        const p0=V.pitch,tp=Math.max(-.2,Math.min(.2,pt.pitch*D2R*.5)),f0=V.fov,t0=performance.now();
+        await new Promise(res=>{(function step(now){
+          const k=Math.max(0,Math.min(1,(now-t0)/950)),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+          V.yaw=y0+dy*e;V.pitch=p0+(tp-p0)*e;V.fov=f0+(40-f0)*e;V.fovT=V.fov;
+          if(k>.62)fade.classList.add('on');
+          if(k<1)requestAnimationFrame(step);else res();})(t0);});
+        const [a]=await Promise.all([p,wait(200)]);
+        prev=from;showRoom(id,a,arrivalYaw(from,id));
+      }else{
+        fade.classList.add('on');
+        const [a]=await Promise.all([p,wait(450)]);
+        prev=from;showRoom(id,a,arrivalYaw(from,id));
+      }
       await wait(60);fade.classList.remove('on');
     }
-  }catch(err){fade.classList.remove('on');fachada.classList.remove('in','gone');cur=null;setNav();}
+  }catch(err){console.error(err);fade.classList.remove('on');fachada.classList.remove('in','gone');cur=null;inMaq=false;$('#maq').classList.remove('on');setNav();}
   busy=false;
 }
+/* para onde olhar ao chegar: de costas para a porta por onde entrou (ou o "chegada"/"yaw" do cômodo) */
+function arrivalYaw(from,id){
+  const dest=TOUR.comodos[id];
+  if(from&&dest.tipo==='pano'){
+    const pt=TOUR.comodos[from].pontos.find(q=>q.para===id);
+    if(pt&&pt.chegada!=null)return pt.chegada;
+    const back=dest.pontos.find(q=>q.para===from&&q.yaw!=null);
+    if(back)return back.yaw+180;
+  }
+  return dest.yaw||0;
+}
+async function openMaq(roomId){
+  if(busy||inMaq||!TOUR.casa3d)return;busy=true;
+  fade.classList.add('on');info.classList.remove('on');
+  await wait(450);
+  roomEl.classList.remove('on');
+  fachada.classList.add('notrans','in','gone');void fachada.offsetWidth;fachada.classList.remove('notrans');
+  cur=null;prev=null;inMaq=true;
+  $('#maq').classList.add('on');
+  if(!Casa3D.open(roomId)){inMaq=false;$('#maq').classList.remove('on');busy=false;await goFachadaForce();return;}
+  setNav();
+  await wait(80);fade.classList.remove('on');
+  busy=false;
+}
+async function goFachadaForce(){fachada.classList.remove('in','gone');fade.classList.remove('on');cur=null;setNav();setInfo(null);}
 async function goFachada(){
-  if(busy||cur===null)return;busy=true;
+  if(!HAS_F||busy||(cur===null&&!inMaq))return;busy=true;
+  if(inMaq){Casa3D.close();inMaq=false;$('#maq').classList.remove('on');lastOrigin={px:W/2,py:H*.6};}
   fachada.style.transformOrigin=`${lastOrigin.px}px ${lastOrigin.py}px`;
   fachada.classList.add('notrans');fachada.classList.add('in');fachada.classList.remove('gone');
   void fachada.offsetWidth;fachada.classList.remove('notrans');
@@ -417,26 +511,64 @@ async function goFachada(){
   await wait(900);setInfo(null);
   busy=false;
 }
-function back(){if(busy)return;if(cur&&prev)goRoom(prev);else if(cur)goFachada();}
+function back(){if(busy)return;if(inMaq)(HAS_F?goFachada():goRoom(Object.keys(TOUR.comodos)[0]));else if(cur&&prev)goRoom(prev);else if(cur)goFachada();}
 
 /* ---------- início ---------- */
-async function init(){
+async function startTour(){
   resize();
   try{if(!initGL())say('Seu navegador não suporta WebGL2: os panoramas 360° não vão funcionar.',9000);}catch(err){console.error(err);}
-  fachAsset=await getAsset('fachada',TOUR.fachada.img,drawFachadaPH);
-  fachCv.width=fachAsset.w;fachCv.height=fachAsset.h;fachCv.getContext('2d').drawImage(fachAsset.im,0,0);
-  fachList=makeHs(fachHs,TOUR.fachada.pontos);
+  HAS_F=!!(TOUR.fachada&&TOUR.fachada.pontos&&TOUR.fachada.pontos.length);
+  if(HAS_F){
+    fachAsset=await getAsset('fachada',TOUR.fachada.img,drawFachadaPH);
+    fachCv.width=fachAsset.w;fachCv.height=fachAsset.h;fachCv.getContext('2d').drawImage(fachAsset.im,0,0);
+    fachList=makeHs(fachHs,TOUR.fachada.pontos);
+  }else fachada.classList.add('in','gone');          // casa sem foto de fachada: começa direto num cômodo
   const menu=$('#menu');
   for(const id of Object.keys(TOUR.comodos)){
     const b=document.createElement('button');b.className='btn';b.dataset.id=id;b.textContent=TOUR.comodos[id].nome;
     b.onclick=()=>{lastOrigin={px:W/2,py:H*.55};if(cur===null)goRoom(id);else if(cur!==id)goRoom(id);};
     menu.appendChild(b);
   }
+  if(TOUR.casa3d){
+    Casa3D.init({cfg:TOUR.casa3d,root:$('#maq'),has:id=>!!TOUR.comodos[id],onFotos:id=>goRoom(id)});
+    $('#bMaq').onclick=()=>openMaq(cur);
+  }else $('#bMaq').hidden=true;
   $('#bFach').onclick=goFachada;$('#bPrev').onclick=()=>prev&&goRoom(prev);
   $('#bFull').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();};
-  setInfo(null);setNav();requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
+  if(HAS_F){setInfo(null);setNav();}
+  else{const first=Object.keys(TOUR.comodos)[0],a=await prepare(first);showRoom(first,a,arrivalYaw(null,first));}
 }
-init();
+
+/* ---------- várias casas: escolhe a casa pelo endereço (?casa=nome) ---------- */
+function loadScript(src){return new Promise((ok,err)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>err(new Error('Não achei '+src));document.head.appendChild(s);});}
+function showHome(list,id,msg){
+  document.title='Tours de casas';
+  const h=$('#home');h.hidden=false;$('#hmsg').textContent=msg||(id?`Não encontrei a casa "${id}".`:(list.length?'Escolha uma casa para visitar.':'Nenhuma casa cadastrada ainda (veja casas/casas.js).'));
+  const g=$('#hgrid');g.innerHTML='';
+  for(const c of list){
+    const a=document.createElement('a');a.className='card';a.href='?casa='+encodeURIComponent(c.id);
+    const cov=document.createElement('div');cov.className='cover';
+    const base=c.base||('casas/'+c.id+'/');
+    if(c.capa)cov.style.backgroundImage=`url("${(/^(https?:)?\/\//.test(c.capa)?c.capa:base.replace(/\/?$/,'/')+c.capa)}")`;
+    const t=document.createElement('h3');t.textContent=c.nome||c.id;
+    const d=document.createElement('p');d.textContent=c.descricao||'';
+    a.append(cov,t,d);g.appendChild(a);
+  }
+}
+async function boot(){
+  const list=typeof CASAS!=='undefined'?CASAS:[],id=new URLSearchParams(location.search).get('casa');
+  let entry=list.find(c=>c.id===id);
+  if(!entry&&!id&&list.length===1)entry=list[0];
+  if(!entry){showHome(list,id);return;}
+  BASE=entry.base||('casas/'+entry.id+'/');if(!BASE.endsWith('/'))BASE+='/';
+  try{await loadScript('casas/'+entry.id+'/config.js');}
+  catch(err){console.error(err);showHome(list,id,'Esta casa não tem o arquivo config.js.');return;}
+  document.title=TOUR.titulo||entry.nome||'Tour';
+  $('#bHome').hidden=list.length<2;
+  startTour();
+}
+boot();
 </script>
 </body>
 </html>
