@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tour da Casa</title>
+<style>
+:root{--ink:#f4efe8;--mut:#cfc6b9;--acc:#e9b872;--bg:#0c0b0d}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none}
+#stage{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab}
+#stage.drag{cursor:grabbing}
+.layer{position:absolute;inset:0}
+
+/* cômodo (fica por baixo da fachada) */
+#room{opacity:0;visibility:hidden;transition:opacity .8s ease}
+#room.on{opacity:1;visibility:visible}
+#room canvas{position:absolute;inset:0;width:100%;height:100%;display:none}
+
+/* fachada */
+#fachada{transition:transform 1.25s cubic-bezier(.55,0,.25,1),opacity .7s ease;will-change:transform}
+#fachada.in{transform:scale(8);opacity:0;pointer-events:none}
+#fachada.gone{visibility:hidden}
+#fachada.notrans{transition:none}
+#fachCv{width:100%;height:100%;object-fit:cover;display:block}
+
+/* pontos clicáveis */
+.hs{position:absolute;left:0;top:0;border:0;background:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px;white-space:nowrap;will-change:transform;font:inherit;padding:6px}
+.hs .dot{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.92);border:3px solid var(--acc);flex:none;animation:pulse 2s infinite}
+.hs .lb{padding:6px 12px;border-radius:99px;background:rgba(12,11,13,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:12px;letter-spacing:.1em;text-transform:uppercase;transition:background .25s,color .25s}
+.hs:hover .lb,.hs:focus-visible .lb{background:var(--acc);color:#1a1208}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(233,184,114,.65)}70%{box-shadow:0 0 0 16px rgba(233,184,114,0)}100%{box-shadow:0 0 0 0 rgba(233,184,114,0)}}
+
+/* interface */
+.ui{position:absolute;z-index:5}
+.glass{background:rgba(14,12,14,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);border-radius:16px}
+#top{left:16px;right:16px;top:calc(14px + env(safe-area-inset-top));display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+#top>*{pointer-events:auto}
+.btn{border:1px solid rgba(255,255,255,.16);background:rgba(14,12,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--ink);padding:9px 14px;border-radius:99px;font:inherit;font-size:13px;letter-spacing:.04em;cursor:pointer;transition:background .2s,color .2s,opacity .3s}
+.btn:hover{background:var(--acc);color:#1a1208}
+.btn[hidden]{display:none}
+#menu{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btn.cur{background:var(--ink);color:#15110a}
+#info{left:16px;bottom:calc(18px + env(safe-area-inset-bottom));max-width:min(440px,calc(100vw - 32px));padding:18px 22px;opacity:0;transform:translateY(8px);transition:opacity .6s .2s,transform .6s .2s;pointer-events:none}
+#info.on{opacity:1;transform:none}
+#info small{display:block;color:var(--acc);letter-spacing:.2em;text-transform:uppercase;font-size:11px;margin-bottom:6px}
+#info h2{font-weight:300;font-size:clamp(26px,5vw,40px);line-height:1.05;letter-spacing:-.01em}
+#info p{margin-top:10px;color:var(--mut);font-size:14px;line-height:1.5}
+#toast{left:50%;bottom:24px;transform:translateX(-50%);padding:10px 16px;font:13px ui-monospace,Consolas,monospace;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#toast.on{opacity:1}
+#fade{position:absolute;inset:0;background:#0c0b0d;opacity:0;pointer-events:none;transition:opacity .45s ease;z-index:4}
+#fade.on{opacity:1}
+#edit{right:16px;bottom:calc(18px + env(safe-area-inset-bottom));font-size:12px;color:var(--mut);padding:8px 12px;display:none}
+body.editing #edit{display:block}
+body.editing #stage{cursor:crosshair}
+@media(max-width:640px){#menu{margin-left:0;width:100%;justify-content:flex-start}.btn{padding:8px 12px;font-size:12px}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="room" class="layer">
+    <canvas id="glCv"></canvas>
+    <canvas id="fotoCv"></canvas>
+    <div id="roomHs" class="layer" style="pointer-events:none"></div>
+  </div>
+  <div id="fachada" class="layer">
+    <canvas id="fachCv"></canvas>
+    <div id="fachHs" class="layer" style="pointer-events:none"></div>
+  </div>
+  <div id="fade"></div>
+
+  <div id="top" class="ui">
+    <button class="btn" id="bFach" hidden>⌂ Fachada</button>
+    <button class="btn" id="bPrev" hidden></button>
+    <div id="menu"></div>
+    <button class="btn" id="bFull" title="Tela cheia">⛶</button>
+  </div>
+  <div id="info" class="ui glass"><small></small><h2></h2><p></p></div>
+  <div id="toast" class="ui glass"></div>
+  <div id="edit" class="ui glass">Modo edição: clique para ver as coordenadas · E para sair</div>
+</div>
+
+<script src="config.js"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const stage=$('#stage'),fachada=$('#fachada'),fachCv=$('#fachCv'),roomEl=$('#room'),glCv=$('#glCv'),fotoCv=$('#fotoCv'),
+      fachHs=$('#fachHs'),roomHs=$('#roomHs'),fade=$('#fade'),info=$('#info'),toast=$('#toast');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const D2R=Math.PI/180;
+document.title=TOUR.titulo;
+
+/* ---------- estado ---------- */
+let W=0,H=0,dpr=1;
+let cur=null;            // id do cômodo atual (null = fachada)
+let prev=null;           // cômodo de onde viemos
+let busy=false, editMode=false;
+let lastOrigin={px:innerWidth/2,py:innerHeight/2};
+const V={yaw:0,pitch:0,fov:75,fovT:75,vy:0,vp:0,panx:0,pany:0,zoom:1.15,zoomT:1.15,vx:0,vyy:0};
+let asset=null;          // imagem do cômodo atual
+let fachAsset=null;
+let hsList=[];           // pontos do cômodo atual: {el,p,px,py}
+let fachList=[];
+const cache={};
+
+/* ---------- imagens (ou exemplos desenhados) ---------- */
+function loadImg(src){return new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});}
+async function getAsset(key,src,drawPH){
+  if(cache[key])return cache[key];
+  let im=await loadImg(src),real=!!im;
+  if(!im){im=document.createElement('canvas');drawPH(im);}
+  const w=im.naturalWidth||im.width,h=im.naturalHeight||im.height;
+  return cache[key]={im,real,w,h,tex:null};
+}
+
+function txt(c,s,x,y,size,col,align,alpha){c.save();c.globalAlpha=alpha==null?1:alpha;c.font=`300 ${size}px "Segoe UI",system-ui,sans-serif`;c.fillStyle=col;c.textAlign=align||'center';c.fillText(s,x,y);c.restore();}
+function shade(hex,k){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;const f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return `rgb(${f(r)},${f(g)},${f(b)})`;}
+
+function drawFachadaPH(cv){
+  const w=cv.width=1600,h=cv.height=900,c=cv.getContext('2d');
+  let g=c.createLinearGradient(0,0,0,h*.7);g.addColorStop(0,'#1d3b66');g.addColorStop(1,'#f0b27a');c.fillStyle=g;c.fillRect(0,0,w,h);
+  c.fillStyle='#2f5a34';c.fillRect(0,h*.78,w,h*.22);
+  c.fillStyle='#3a3f4a';c.fillRect(w*.12,h*.80,w*.76,h*.04);
+  // casa
+  c.fillStyle='#e8dcc8';c.fillRect(w*.2,h*.45,w*.6,h*.35);
+  c.fillStyle='#d9c9ae';c.fillRect(w*.3,h*.22,w*.4,h*.24);
+  c.fillStyle='#6b3b2e';c.beginPath();c.moveTo(w*.18,h*.45);c.lineTo(w*.5,h*.34);c.lineTo(w*.82,h*.45);c.closePath();c.fill();
+  c.beginPath();c.moveTo(w*.28,h*.22);c.lineTo(w*.5,h*.12);c.lineTo(w*.72,h*.22);c.closePath();c.fill();
+  c.fillStyle='#3b2a22';c.fillRect(w*.47,h*.64,w*.06,h*.16);
+  for(const p of TOUR.fachada.pontos){
+    c.fillStyle='#ffd58a';c.shadowColor='#ffb347';c.shadowBlur=40;
+    c.fillRect(p.x*w-w*.05,p.y*h-h*.07,w*.1,h*.12);c.shadowBlur=0;
+    c.strokeStyle='#5a4636';c.lineWidth=6;c.strokeRect(p.x*w-w*.05,p.y*h-h*.07,w*.1,h*.12);
+  }
+  txt(c,'FOTO DE EXEMPLO — troque por fotos/fachada.jpg',w/2,h-22,22,'rgba(255,255,255,.7)');
+}
+function drawPanoPH(cv,id){
+  const room=TOUR.comodos[id],W2=cv.width=2048,H2=cv.height=1024,c=cv.getContext('2d'),col=room.cor||'#b9a68a';
+  c.fillStyle=shade(col,1.15);c.fillRect(0,0,W2,H2*.31);            // teto
+  c.fillStyle=shade(col,.95);c.fillRect(0,H2*.31,W2,H2*.33);        // parede
+  c.fillStyle=shade(col,.55);c.fillRect(0,H2*.64,W2,H2*.36);        // piso
+  c.strokeStyle='rgba(0,0,0,.18)';c.lineWidth=2;
+  for(let i=0;i<=24;i++){const x=i/24*W2;c.beginPath();c.moveTo(x,H2*.64);c.lineTo(x,H2);c.stroke();}
+  for(let i=1;i<6;i++){const y=H2*.64+i*i*H2*.0105;c.beginPath();c.moveTo(0,y);c.lineTo(W2,y);c.stroke();}
+  const X=yaw=>(yaw/360+.5)*W2;
+  for(let yaw=-180;yaw<180;yaw+=30){            // marcas de orientação
+    const x=X(yaw);c.fillStyle='rgba(255,255,255,.12)';c.fillRect(x-1,H2*.31,2,H2*.33);
+    txt(c,yaw+'°',x,H2*.58,26,'rgba(0,0,0,.45)');
+  }
+  for(let yaw=-135;yaw<180;yaw+=90){txt(c,room.nome,X(yaw),H2*.46,64,'rgba(255,255,255,.55)');}
+  for(const p of room.pontos){                  // portas
+    for(const o of [-W2,0,W2]){
+      const x=X(p.yaw)+o,dw=W2*.034;
+      c.fillStyle='#2b1d14';c.fillRect(x-dw,H2*.36,dw*2,H2*.28);
+      c.fillStyle='#e9b872';c.fillRect(x+dw*.55,H2*.50,10,10);
+      txt(c,p.rotulo,x,H2*.33,34,'rgba(255,255,255,.9)');
+    }
+  }
+  txt(c,'PANORAMA DE EXEMPLO — troque por '+room.img,W2/2,H2-30,26,'rgba(255,255,255,.7)');
+}
+function drawFotoPH(cv,id){
+  const room=TOUR.comodos[id],w=cv.width=1800,h=cv.height=1100,c=cv.getContext('2d'),col=room.cor||'#b9a68a';
+  c.fillStyle=shade(col,1.0);c.fillRect(0,0,w,h*.68);
+  c.fillStyle=shade(col,.55);c.fillRect(0,h*.68,w,h*.32);
+  c.fillStyle='rgba(0,0,0,.15)';c.fillRect(w*.08,h*.12,w*.22,h*.4);
+  c.fillStyle='#bfe0ff';c.fillRect(w*.1,h*.14,w*.18,h*.36);
+  for(const p of room.pontos){c.fillStyle='#2b1d14';c.fillRect(p.x*w-w*.035,p.y*h-h*.2,w*.07,h*.34);}
+  txt(c,room.nome,w/2,h*.4,120,'rgba(255,255,255,.55)');
+  txt(c,'FOTO DE EXEMPLO — troque por '+room.img,w/2,h-30,28,'rgba(255,255,255,.7)');
+}
+
+/* ---------- "cover" (foto preenchendo a tela) ---------- */
+function cover(iw,ih,zoom,panx,pany){
+  const s=Math.max(W/iw,H/ih)*zoom,dw=iw*s,dh=ih*s;
+  const ox=(W-dw)/2+panx*Math.max(0,(dw-W)/2),oy=(H-dh)/2+pany*Math.max(0,(dh-H)/2);
+  return {s,dw,dh,ox,oy};
+}
+
+/* ---------- WebGL: panorama equiretangular ---------- */
+let gl=null,prog=null,U={},maxTex=4096;
+function initGL(){
+  gl=glCv.getContext('webgl2',{antialias:false,alpha:false});
+  if(!gl)return false;
+  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
+  prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,`#version 300 es
+void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,`#version 300 es
+precision highp float;
+uniform vec2 uRes;uniform float uYaw,uPitch,uT;uniform sampler2D uTex;
+out vec4 o;
+void main(){
+  vec2 p=gl_FragCoord.xy/uRes*2.-1.;p.x*=uRes.x/uRes.y;
+  vec3 d=normalize(vec3(p.x*uT,p.y*uT,-1.));
+  float cp=cos(uPitch),sp=sin(uPitch);
+  d=vec3(d.x,d.y*cp-d.z*sp,d.y*sp+d.z*cp);
+  float cy=cos(uYaw),sy=sin(uYaw);
+  d=vec3(d.x*cy-d.z*sy,d.y,d.x*sy+d.z*cy);
+  float u=atan(d.x,-d.z)/6.2831853+.5;
+  float v=asin(clamp(d.y,-1.,1.))/3.1415927+.5;
+  o=vec4(texture(uTex,vec2(u,v)).rgb,1.);
+}`));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  for(const n of ['uRes','uYaw','uPitch','uT','uTex'])U[n]=gl.getUniformLocation(prog,n);
+  maxTex=gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  return true;
+}
+function panoTexture(a){
+  if(a.tex)return a.tex;
+  let im=a.im,w=a.w,h=a.h;
+  if(w>maxTex||h>maxTex){const k=Math.min(maxTex/w,maxTex/h),c=document.createElement('canvas');c.width=Math.floor(w*k);c.height=Math.floor(h*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);im=c;}
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,im);   // pode lançar SecurityError em file://
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  return a.tex=t;
+}
+
+/* ---------- projeção dos pontos no panorama ---------- */
+function projPano(yawD,pitchD){
+  const yw=yawD*D2R,pt=pitchD*D2R;
+  let x=Math.cos(pt)*Math.sin(yw),y=Math.sin(pt),z=-Math.cos(pt)*Math.cos(yw);
+  const cy=Math.cos(V.yaw),sy=Math.sin(V.yaw);                 // yaw inverso
+  let x1=x*cy+z*sy,z1=-x*sy+z*cy;x=x1;z=z1;
+  const cp=Math.cos(V.pitch),sp=Math.sin(V.pitch);             // pitch inverso
+  let y1=y*cp+z*sp;z1=-y*sp+z*cp;y=y1;z=z1;
+  if(z>-0.05)return null;
+  const t=Math.tan(V.fov*D2R/2),asp=W/H;
+  return [(x/-z/(t*asp)*.5+.5)*W,(1-(y/-z/t*.5+.5))*H];
+}
+function unprojPano(px,py){
+  const t=Math.tan(V.fov*D2R/2),asp=W/H,nx=px/W*2-1,ny=1-py/H*2;
+  let d=[nx*asp*t,ny*t,-1];const l=Math.hypot(...d);d=d.map(v=>v/l);
+  const cp=Math.cos(V.pitch),sp=Math.sin(V.pitch);
+  d=[d[0],d[1]*cp-d[2]*sp,d[1]*sp+d[2]*cp];
+  const cy=Math.cos(V.yaw),sy=Math.sin(V.yaw);
+  d=[d[0]*cy-d[2]*sy,d[1],d[0]*sy+d[2]*cy];
+  return {yaw:Math.atan2(d[0],-d[2])/D2R,pitch:Math.asin(Math.max(-1,Math.min(1,d[1])))/D2R};
+}
+
+/* ---------- pontos clicáveis (DOM) ---------- */
+function makeHs(layer,pts){
+  layer.innerHTML='';
+  return pts.map(p=>{
+    const el=document.createElement('button');el.className='hs';el.style.pointerEvents='auto';
+    el.innerHTML=`<span class="dot"></span><span class="lb"></span>`;el.querySelector('.lb').textContent=p.rotulo||TOUR.comodos[p.para].nome;
+    const o={el,p,px:0,py:0};
+    el.addEventListener('click',e=>{e.stopPropagation();if(editMode||moved>6)return;lastOrigin={px:o.px,py:o.py};goRoom(p.para);});
+    layer.appendChild(el);return o;
+  });
+}
+function place(o,x,y,show){
+  o.px=x;o.py=y;
+  if(!show){o.el.style.display='none';return;}
+  o.el.style.display='';o.el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-17px,-50%)`;
+}
+
+/* ---------- layout ---------- */
+function resize(){
+  W=stage.clientWidth;H=stage.clientHeight;dpr=Math.min(devicePixelRatio||1,2);
+  for(const c of [glCv,fotoCv]){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);}
+}
+addEventListener('resize',resize);
+
+/* ---------- loop de desenho ---------- */
+let last=0;
+function frame(t){
+  requestAnimationFrame(frame);
+  const dt=Math.min(.05,(t-last)/1000||0);last=t;
+  if(!W)return;
+  if(!fachada.classList.contains('gone')&&fachAsset){          // fachada
+    const c=cover(fachAsset.w,fachAsset.h,1,0,0);
+    for(const o of fachList)place(o,c.ox+o.p.x*c.dw,c.oy+o.p.y*c.dh,true);
+  }
+  if(!cur||!asset)return;
+  const room=TOUR.comodos[cur];
+  if(room.tipo==='pano'){
+    if(!dragging){V.yaw+=V.vy*dt;V.pitch+=V.vp*dt;V.vy*=Math.pow(.02,dt);V.vp*=Math.pow(.02,dt);
+      if(!idleStop&&Math.abs(V.vy)<.02)V.yaw+=.012*dt;}
+    V.pitch=Math.max(-85*D2R,Math.min(85*D2R,V.pitch));
+    V.fov+=(V.fovT-V.fov)*Math.min(1,dt*3.2);
+    gl.viewport(0,0,glCv.width,glCv.height);gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,panoTexture(asset));
+    gl.uniform1i(U.uTex,0);gl.uniform2f(U.uRes,glCv.width,glCv.height);
+    gl.uniform1f(U.uYaw,V.yaw);gl.uniform1f(U.uPitch,V.pitch);gl.uniform1f(U.uT,Math.tan(V.fov*D2R/2));
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    for(const o of hsList){const q=projPano(o.p.yaw,o.p.pitch);place(o,q?q[0]:0,q?q[1]:0,!!q&&q[0]>-80&&q[0]<W+80&&q[1]>-80&&q[1]<H+80);}
+  }else{
+    if(!dragging){V.panx+=V.vx*dt;V.pany+=V.vyy*dt;V.vx*=Math.pow(.02,dt);V.vyy*=Math.pow(.02,dt);}
+    V.panx=Math.max(-1,Math.min(1,V.panx));V.pany=Math.max(-1,Math.min(1,V.pany));
+    V.zoom+=(V.zoomT-V.zoom)*Math.min(1,dt*3.2);
+    const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany),x=fotoCv.getContext('2d');
+    x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);
+    x.imageSmoothingQuality='high';x.drawImage(asset.im,c.ox,c.oy,c.dw,c.dh);
+    for(const o of hsList)place(o,c.ox+o.p.x*c.dw,c.oy+o.p.y*c.dh,true);
+  }
+}
+
+/* ---------- interação: arrastar, rolar, teclado ---------- */
+let dragging=false,moved=0,lx=0,ly=0,idleStop=false,downX=0,downY=0;
+stage.addEventListener('pointerdown',e=>{
+  moved=0;                                   // zera sempre, senão um arrasto antigo bloqueia os pontos
+  if(e.target.closest('.ui,.hs'))return;
+  dragging=true;moved=0;lx=downX=e.clientX;ly=downY=e.clientY;idleStop=true;stage.classList.add('drag');stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+  if(!cur)return;
+  if(TOUR.comodos[cur].tipo==='pano'){
+    const k=V.fov*D2R/H;V.yaw-=dx*k;V.pitch+=dy*k;V.vy=-dx*k*60;V.vp=dy*k*60;
+  }else if(asset){
+    const c=cover(asset.w,asset.h,V.zoom,0,0),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
+    V.panx-=dx/rx;V.pany-=dy/ry;V.vx=-dx/rx*30;V.vyy=-dy/ry*30;
+  }
+});
+function endDrag(e){
+  if(!dragging)return;dragging=false;stage.classList.remove('drag');
+  if(editMode&&moved<6)editClick(e.clientX,e.clientY);
+}
+stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
+stage.addEventListener('wheel',e=>{
+  if(!cur)return;e.preventDefault();
+  if(TOUR.comodos[cur].tipo==='pano')V.fovT=Math.max(35,Math.min(95,V.fovT*(1+e.deltaY*.001)));
+  else V.zoomT=Math.max(1.05,Math.min(2.2,V.zoomT*(1-e.deltaY*.001)));
+},{passive:false});
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){back();return;}
+  if(e.key==='e'||e.key==='E'){editMode=!editMode;document.body.classList.toggle('editing',editMode);say(editMode?'Modo edição ligado':'Modo edição desligado');return;}
+  if(!cur)return;
+  const s=TOUR.comodos[cur].tipo==='pano',k=.08;
+  if(e.key==='ArrowLeft'){s?V.yaw-=k:V.panx-=.1;}
+  if(e.key==='ArrowRight'){s?V.yaw+=k:V.panx+=.1;}
+  if(e.key==='ArrowUp'){s?V.pitch+=k:V.pany-=.1;}
+  if(e.key==='ArrowDown'){s?V.pitch-=k:V.pany+=.1;}
+});
+
+/* ---------- modo edição: mostra as coordenadas do clique ---------- */
+let toastT=0;
+function say(s,ms=3500){toast.textContent=s;toast.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>toast.classList.remove('on'),ms);}
+function editClick(px,py){
+  let s;
+  if(!cur&&fachAsset){const c=cover(fachAsset.w,fachAsset.h,1,0,0);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
+  else if(cur&&TOUR.comodos[cur].tipo==='pano'){const r=unprojPano(px,py);s=`yaw: ${r.yaw.toFixed(0)}, pitch: ${r.pitch.toFixed(0)}`;}
+  else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
+  if(s){say(s,6000);console.log('[ponto]',s);try{navigator.clipboard.writeText(s)}catch(_){}}
+}
+
+/* ---------- navegação ---------- */
+function easeFov(){V.fov=48;V.fovT=75;}
+function setInfo(room){
+  info.classList.remove('on');
+  setTimeout(()=>{
+    if(room){info.querySelector('small').textContent=TOUR.titulo;info.querySelector('h2').textContent=room.nome;info.querySelector('p').textContent=room.texto||'';}
+    else{info.querySelector('small').textContent='Bem-vindo';info.querySelector('h2').textContent=TOUR.titulo;info.querySelector('p').textContent=TOUR.subtitulo||'';}
+    info.classList.add('on');
+  },250);
+}
+function setNav(){
+  $('#bFach').hidden=!cur;
+  const bp=$('#bPrev');bp.hidden=!(cur&&prev&&prev!==cur);
+  if(!bp.hidden)bp.textContent='← '+TOUR.comodos[prev].nome;
+  document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===cur));
+}
+async function prepare(id){
+  const room=TOUR.comodos[id];
+  const a=await getAsset('r:'+id,room.img,c=>room.tipo==='pano'?drawPanoPH(c,id):drawFotoPH(c,id));
+  if(room.tipo==='pano'){try{panoTexture(a);}catch(err){a.tex=null;fail(err);throw err;}}
+  return a;
+}
+function fail(err){
+  console.error(err);
+  say('Não foi possível usar a foto no 3D. Abra o site por um servidor (iniciar.bat), não direto pelo arquivo.',9000);
+}
+function showRoom(id,a){
+  const room=TOUR.comodos[id];
+  asset=a;cur=id;
+  glCv.style.display=room.tipo==='pano'?'block':'none';
+  fotoCv.style.display=room.tipo==='pano'?'none':'block';
+  hsList=makeHs(roomHs,room.pontos);
+  idleStop=false;V.vy=V.vp=V.vx=V.vyy=0;
+  if(room.tipo==='pano'){V.yaw=(room.yaw||0)*D2R;V.pitch=0;easeFov();}
+  else{V.panx=0;V.pany=0;V.zoom=1.5;V.zoomT=1.15;}
+  roomEl.classList.add('on');setInfo(room);setNav();
+}
+async function goRoom(id){
+  if(busy||!TOUR.comodos[id])return;busy=true;
+  try{
+    const from=cur,p=prepare(id);
+    if(from===null){                                    // fachada → cômodo: voo até a janela
+      fachada.style.transformOrigin=`${lastOrigin.px}px ${lastOrigin.py}px`;
+      fachada.classList.add('in');info.classList.remove('on');
+      const [a]=await Promise.all([p,wait(650)]);
+      prev=null;showRoom(id,a);
+      await wait(700);fachada.classList.add('gone');
+    }else{                                              // cômodo → cômodo: escurece e troca
+      fade.classList.add('on');info.classList.remove('on');
+      const [a]=await Promise.all([p,wait(450)]);
+      prev=from;showRoom(id,a);
+      await wait(60);fade.classList.remove('on');
+    }
+  }catch(err){fade.classList.remove('on');fachada.classList.remove('in','gone');cur=null;setNav();}
+  busy=false;
+}
+async function goFachada(){
+  if(busy||cur===null)return;busy=true;
+  fachada.style.transformOrigin=`${lastOrigin.px}px ${lastOrigin.py}px`;
+  fachada.classList.add('notrans');fachada.classList.add('in');fachada.classList.remove('gone');
+  void fachada.offsetWidth;fachada.classList.remove('notrans');
+  fachada.classList.remove('in');
+  roomEl.classList.remove('on');info.classList.remove('on');
+  cur=null;prev=null;setNav();
+  await wait(900);setInfo(null);
+  busy=false;
+}
+function back(){if(busy)return;if(cur&&prev)goRoom(prev);else if(cur)goFachada();}
+
+/* ---------- início ---------- */
+async function init(){
+  resize();
+  try{if(!initGL())say('Seu navegador não suporta WebGL2: os panoramas 360° não vão funcionar.',9000);}catch(err){console.error(err);}
+  fachAsset=await getAsset('fachada',TOUR.fachada.img,drawFachadaPH);
+  fachCv.width=fachAsset.w;fachCv.height=fachAsset.h;fachCv.getContext('2d').drawImage(fachAsset.im,0,0);
+  fachList=makeHs(fachHs,TOUR.fachada.pontos);
+  const menu=$('#menu');
+  for(const id of Object.keys(TOUR.comodos)){
+    const b=document.createElement('button');b.className='btn';b.dataset.id=id;b.textContent=TOUR.comodos[id].nome;
+    b.onclick=()=>{lastOrigin={px:W/2,py:H*.55};if(cur===null)goRoom(id);else if(cur!==id)goRoom(id);};
+    menu.appendChild(b);
+  }
+  $('#bFach').onclick=goFachada;$('#bPrev').onclick=()=>prev&&goRoom(prev);
+  $('#bFull').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();};
+  setInfo(null);setNav();requestAnimationFrame(frame);
+}
+init();
+</script>
+</body>
+</html>
