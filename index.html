@@ -482,7 +482,8 @@ function setNav(){
   $('#bFach').hidden=!(HAS_F&&(cur||inMaq));$('#bMaq').hidden=inMaq||!TOUR.casa3d;
   const bp=$('#bPrev');bp.hidden=!(cur&&prev&&prev!==cur);
   if(!bp.hidden)bp.textContent='← '+TOUR.comodos[prev].nome;
-  document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===cur));
+  const hi=cur&&TOUR.comodos[cur].pai||cur;          // vista de detalhe: destaca o ambiente "pai" no menu
+  document.querySelectorAll('#menu .btn').forEach(b=>b.classList.toggle('cur',b.dataset.id===hi));
   const cb=document.querySelector('#menu .btn.cur'),mn=$('#menu');      // mantém o ambiente atual visível no menu
   if(cb&&mn)mn.scrollTo({left:cb.offsetLeft-mn.clientWidth/2+cb.offsetWidth/2,behavior:'smooth'});
 }
@@ -600,6 +601,7 @@ async function startTour(){
   }else fachada.classList.add('in','gone');          // casa sem foto de fachada: começa direto num cômodo
   const menu=$('#menu');
   for(const id of Object.keys(TOUR.comodos)){
+    if(TOUR.comodos[id].menu===false)continue;        // vistas de detalhe: só por pontos clicáveis
     const b=document.createElement('button');b.className='btn';b.dataset.id=id;b.textContent=TOUR.comodos[id].nome;
     b.onclick=()=>{lastOrigin={px:W/2,py:H*.55};if(cur===null)goRoom(id);else if(cur!==id)goRoom(id);};
     menu.appendChild(b);

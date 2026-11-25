@@ -5,6 +5,5 @@
                (o servidor precisa liberar CORS, senão os panoramas 360° não carregam) */
 const CASAS=[
   { id: 'minha-casa', nome: 'Casa de exemplo', descricao: 'Sobrado com sala, cozinha, quarto e banheiro. Fotos de exemplo (CC0).', capa: 'fotos/fachada.jpg' },
-  { id: "praia", nome: "Casa de Praia", descricao: "Segunda casa de teste, sem fachada.", capa: 'fotos/fachada.jpg' },
   { id: 'casa_mira', nome: 'Casa Mira', descricao: 'Sobrado de 2 andares com pé-direito duplo, lareira, pátio com churrasqueira e spa.', capa: 'fotos/fachada.jpg' },
 ];

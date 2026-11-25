@@ -30,6 +30,8 @@ const TOUR = {
       pontos: [
         { yaw: -88, pitch: -4, para: 'cozinha',    rotulo: 'Cozinha' },
         { yaw: -47, pitch:  4, para: 'lavanderia', rotulo: 'Lavanderia' },
+        { yaw: -17, pitch: -8, para: 'sala_lareira', rotulo: 'Lareira e painel' },
+        { yaw:  -4, pitch: 10, para: 'sala_estante', rotulo: 'Estante planejada' },
         { yaw:  24, pitch: -3, para: 'entrada',    rotulo: 'Porta de entrada' },
         { yaw:  45, pitch: 27, para: 'pedireito',  rotulo: 'Olhar para cima' },
         { yaw:  54, pitch: -6, para: 'escada',     rotulo: 'Escada' },
@@ -48,6 +50,64 @@ const TOUR = {
         { yaw: -19, pitch:  4, para: 'lavanderia', rotulo: 'Lavanderia' },
         { yaw:   8, pitch:  4, para: 'sala',       rotulo: 'Sala' },
         { yaw:  27, pitch:  0, para: 'escada',     rotulo: 'Escada' },
+        { yaw:   0, pitch: -14, para: 'cozinha_ilha',     rotulo: 'Ilha planejada' },
+        { yaw:  56, pitch: 11, para: 'cozinha_armarios', rotulo: 'Armários planejados' },
+        { yaw:  70, pitch: -2, para: 'apoio',            rotulo: 'Armário de apoio' },
+      ],
+    },
+
+    /* vistas de detalhe dos móveis planejados (fora do menu; chega-se pelos pontos) */
+    sala_lareira: {
+      nome: 'Lareira e painel', texto: 'Lareira com revestimento cimentício e painel amadeirado com nichos iluminados.',
+      img: 'fotos/sala_lareira.jpg', tipo: 'foto', menu: false, pai: 'sala',
+      pontos: [
+        { x: 0.55, y: 0.45, para: 'sala_estante', rotulo: 'Estante' },
+        { x: 0.82, y: 0.55, para: 'entrada',      rotulo: 'Porta de entrada' },
+        { x: 0.45, y: 0.88, para: 'sala',         rotulo: 'Voltar à sala' },
+      ],
+    },
+    sala_estante: {
+      nome: 'Estante planejada', texto: 'Estante e banco planejados ao lado da lareira, vistos a partir da cozinha.',
+      img: 'fotos/sala_estante.jpg', tipo: 'foto', menu: false, pai: 'sala',
+      pontos: [
+        { x: 0.65, y: 0.50, para: 'sala_lareira', rotulo: 'Lareira' },
+        { x: 0.18, y: 0.55, para: 'cozinha_ilha', rotulo: 'Cozinha' },
+        { x: 0.50, y: 0.88, para: 'sala',         rotulo: 'Voltar à sala' },
+      ],
+    },
+    cozinha_ilha: {
+      nome: 'Ilha planejada', texto: 'Ilha com tampo em granito preto e frente amadeirada, armários aéreos.',
+      img: 'fotos/cozinha_ilha.jpg', tipo: 'foto', menu: false, pai: 'cozinha',
+      pontos: [
+        { x: 0.37, y: 0.40, para: 'cozinha_armarios', rotulo: 'Armários' },
+        { x: 0.80, y: 0.45, para: 'cozinha_angulo',   rotulo: 'Outro ângulo' },
+        { x: 0.50, y: 0.92, para: 'cozinha',          rotulo: 'Voltar à cozinha' },
+      ],
+    },
+    cozinha_armarios: {
+      nome: 'Armários planejados', texto: 'Bancada com cuba, armários superiores amadeirados e porta para o pátio.',
+      img: 'fotos/cozinha_armarios.jpg', tipo: 'foto', menu: false, pai: 'cozinha',
+      pontos: [
+        { x: 0.50, y: 0.50, para: 'patio',          rotulo: 'Pátio' },
+        { x: 0.75, y: 0.60, para: 'cozinha_ilha',   rotulo: 'Ilha' },
+        { x: 0.30, y: 0.90, para: 'cozinha',        rotulo: 'Voltar à cozinha' },
+      ],
+    },
+    cozinha_angulo: {
+      nome: 'Cozinha integrada', texto: 'Ilha com cooktop integrada à sala e à escada.',
+      img: 'fotos/cozinha_angulo.jpg', tipo: 'foto', menu: false, pai: 'cozinha',
+      pontos: [
+        { x: 0.48, y: 0.42, para: 'sala_lareira', rotulo: 'Lareira' },
+        { x: 0.75, y: 0.45, para: 'escada',       rotulo: 'Escada' },
+        { x: 0.50, y: 0.90, para: 'cozinha',      rotulo: 'Voltar à cozinha' },
+      ],
+    },
+    apoio: {
+      nome: 'Armário de apoio', texto: 'Bancada com cuba e armários planejados junto à escada.',
+      img: 'fotos/apoio.jpg', tipo: 'foto', menu: false, pai: 'cozinha',
+      pontos: [
+        { x: 0.25, y: 0.85, para: 'cozinha', rotulo: 'Voltar à cozinha' },
+        { x: 0.12, y: 0.30, para: 'escada',  rotulo: 'Escada' },
       ],
     },
     lavanderia: {
