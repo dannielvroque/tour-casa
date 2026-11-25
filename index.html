@@ -61,7 +61,7 @@ body.editing #stage{cursor:crosshair}
 .hs .dot{transition:transform .2s}
 
 /* página inicial: lista de casas */
-#home{position:absolute;inset:0;z-index:30;background:var(--bg);overflow:auto;-webkit-user-select:text;user-select:text}
+#home{position:absolute;inset:0;z-index:30;touch-action:auto;cursor:default;background:var(--bg);overflow:auto;-webkit-user-select:text;user-select:text}
 #home[hidden]{display:none}
 .hwrap{max-width:1080px;margin:0 auto;padding:calc(40px + env(safe-area-inset-top)) 20px 60px}
 .hwrap h1{font-weight:300;font-size:clamp(30px,6vw,52px);letter-spacing:-.02em}
@@ -351,7 +351,7 @@ function frame(t){
 let dragging=false,moved=0,lx=0,ly=0,idleStop=false,downX=0,downY=0;
 stage.addEventListener('pointerdown',e=>{
   moved=0;                                   // zera sempre, senão um arrasto antigo bloqueia os pontos
-  if(inMaq||e.target.closest('.ui,.hs,.area'))return;
+  if(inMaq||e.target.closest('.ui,.hs,.area,#home'))return;
   dragging=true;moved=0;lx=downX=e.clientX;ly=downY=e.clientY;idleStop=true;stage.classList.add('drag');stage.setPointerCapture(e.pointerId);
 });
 stage.addEventListener('pointermove',e=>{
