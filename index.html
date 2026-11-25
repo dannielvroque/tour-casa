@@ -22,7 +22,9 @@ html,body{height:100%;background:var(--bg);color:var(--ink);font-family:"Segoe U
 #fachada.in{transform:scale(8);opacity:0;pointer-events:none}
 #fachada.gone{visibility:hidden}
 #fachada.notrans{transition:none}
-#fachCv{width:100%;height:100%;object-fit:cover;display:block}
+#fachCv{position:relative;width:100%;height:100%;object-fit:cover;display:block}
+#fachBg{position:absolute;inset:-6%;background:#0c0b0d center/cover no-repeat;filter:blur(22px) brightness(.5);display:none}
+#fachada.contain #fachBg{display:block}
 
 /* pontos clicáveis */
 .hs{position:absolute;left:0;top:0;border:0;background:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px;white-space:nowrap;will-change:transform;font:inherit;padding:6px}
@@ -117,6 +119,7 @@ body.editing #stage{cursor:crosshair}
     <div id="roomHs" class="layer" style="pointer-events:none"></div>
   </div>
   <div id="fachada" class="layer">
+    <div id="fachBg"></div>
     <canvas id="fachCv"></canvas>
     <div id="fachHs" class="layer" style="pointer-events:none"></div>
   </div>
@@ -228,8 +231,8 @@ function drawFotoPH(cv,id){
 }
 
 /* ---------- "cover" (foto preenchendo a tela) ---------- */
-function cover(iw,ih,zoom,panx,pany){
-  const s=Math.max(W/iw,H/ih)*zoom,dw=iw*s,dh=ih*s;
+function cover(iw,ih,zoom,panx,pany,mode){
+  const s=(mode==='contain'?Math.min(W/iw,H/ih):Math.max(W/iw,H/ih))*zoom,dw=iw*s,dh=ih*s;
   const ox=(W-dw)/2+panx*Math.max(0,(dw-W)/2),oy=(H-dh)/2+pany*Math.max(0,(dh-H)/2);
   return {s,dw,dh,ox,oy};
 }
@@ -327,7 +330,10 @@ function place(o,x,y,show){
 function resize(){
   W=stage.clientWidth;H=stage.clientHeight;dpr=Math.min(devicePixelRatio||1,2);
   for(const c of [glCv,fotoCv]){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);}
+  const m=fachMode();fachCv.style.objectFit=m;fachada.classList.toggle('contain',m==='contain');
 }
+/* fachada: em tela larga preenche a tela; em tela estreita (celular em pé) mostra a foto inteira */
+function fachMode(){return W/H<0.95?'contain':'cover';}
 addEventListener('resize',resize);
 
 /* ---------- loop de desenho ---------- */
@@ -337,7 +343,7 @@ function frame(t){
   const dt=Math.min(.05,(t-last)/1000||0);last=t;
   if(!W)return;
   if(!fachada.classList.contains('gone')&&fachAsset){          // fachada
-    const c=cover(fachAsset.w,fachAsset.h,1,0,0);
+    const c=cover(fachAsset.w,fachAsset.h,1,0,0,fachMode());
     for(const o of fachList){
       const A=o.p.area;
       if(A){o.area.style.transform=`translate(${(c.ox+A[0]*c.dw).toFixed(1)}px,${(c.oy+A[1]*c.dh).toFixed(1)}px)`;o.area.style.width=((A[2]-A[0])*c.dw).toFixed(1)+'px';o.area.style.height=((A[3]-A[1])*c.dh).toFixed(1)+'px';}
@@ -362,8 +368,11 @@ function frame(t){
     if(!dragging){V.panx+=V.vx*dt;V.pany+=V.vyy*dt;V.vx*=Math.pow(.02,dt);V.vyy*=Math.pow(.02,dt);}
     V.panx=Math.max(-1,Math.min(1,V.panx));V.pany=Math.max(-1,Math.min(1,V.pany));
     V.zoom+=(V.zoomT-V.zoom)*Math.min(1,dt*3.2);
-    const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany),x=fotoCv.getContext('2d');
+    const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany,'contain'),x=fotoCv.getContext('2d');   // foto inteira (zoom 1), sem cortar
     x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);
+    if(!asset.bg){const b=document.createElement('canvas');b.width=48;b.height=Math.max(8,Math.round(48*asset.h/asset.w));b.getContext('2d').drawImage(asset.im,0,0,b.width,b.height);asset.bg=b;}
+    const cb=cover(asset.w,asset.h,1.15,0,0,'cover');                  // fundo: a própria foto, bem desfocada
+    x.imageSmoothingEnabled=true;x.drawImage(asset.bg,cb.ox,cb.oy,cb.dw,cb.dh);x.fillStyle='rgba(8,7,9,.5)';x.fillRect(0,0,W,H);
     x.imageSmoothingQuality='high';x.drawImage(asset.im,c.ox,c.oy,c.dw,c.dh);
     for(const o of hsList)place(o,c.ox+o.p.x*c.dw,c.oy+o.p.y*c.dh,true);
   }
@@ -375,19 +384,32 @@ stage.addEventListener('pointerdown',e=>{
   moved=0;                                   // zera sempre, senão um arrasto antigo bloqueia os pontos
   if(inMaq||e.target.closest('.ui,.hs,.area,#home'))return;
   dragging=true;moved=0;lx=downX=e.clientX;ly=downY=e.clientY;idleStop=true;stage.classList.add('drag');stage.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y);}
 });
+const ptrs=new Map();let pinch0=0;                     // pinça (dois dedos) = zoom
 stage.addEventListener('pointermove',e=>{
+  const p=ptrs.get(e.pointerId);
+  if(p){p.x=e.clientX;p.y=e.clientY;}
+  if(ptrs.size===2&&cur){
+    const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinch0){const f=pinch0/d;
+      if(TOUR.comodos[cur].tipo==='pano'){V.fov=V.fovT=Math.max(35,Math.min(95,V.fov*f));}
+      else{V.zoom=V.zoomT=Math.max(1,Math.min(3,V.zoom/f));}}
+    pinch0=d;moved+=10;lx=e.clientX;ly=e.clientY;return;
+  }
   if(!dragging)return;
   const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
   if(!cur)return;
   if(TOUR.comodos[cur].tipo==='pano'){
     const k=V.fov*D2R/H;V.yaw-=dx*k;V.pitch+=dy*k;V.vy=-dx*k*60;V.vp=dy*k*60;
   }else if(asset){
-    const c=cover(asset.w,asset.h,V.zoom,0,0),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
-    V.panx-=dx/rx;V.pany-=dy/ry;V.vx=-dx/rx*30;V.vyy=-dy/ry*30;
+    const c=cover(asset.w,asset.h,V.zoom,0,0,'contain'),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
+    V.panx+=dx/rx;V.pany+=dy/ry;V.vx=dx/rx*30;V.vyy=dy/ry*30;      // a imagem acompanha o dedo/mouse
   }
 });
 function endDrag(e){
+  ptrs.delete(e.pointerId);if(ptrs.size<2)pinch0=0;
   if(!dragging)return;dragging=false;stage.classList.remove('drag');
   if(editMode&&moved<6)editClick(e.clientX,e.clientY);
 }
@@ -395,17 +417,17 @@ stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercance
 stage.addEventListener('wheel',e=>{
   if(!cur)return;e.preventDefault();
   if(TOUR.comodos[cur].tipo==='pano')V.fovT=Math.max(35,Math.min(95,V.fovT*(1+e.deltaY*.001)));
-  else V.zoomT=Math.max(1.05,Math.min(2.2,V.zoomT*(1-e.deltaY*.001)));
+  else V.zoomT=Math.max(1,Math.min(3,V.zoomT*(1-e.deltaY*.001)));
 },{passive:false});
 addEventListener('keydown',e=>{
   if(e.key==='Escape'){back();return;}
   if(e.key==='e'||e.key==='E'){editMode=!editMode;document.body.classList.toggle('editing',editMode);say(editMode?'Modo edição ligado':'Modo edição desligado');return;}
   if(!cur)return;
   const s=TOUR.comodos[cur].tipo==='pano',k=.08;
-  if(e.key==='ArrowLeft'){s?V.yaw-=k:V.panx-=.1;}
-  if(e.key==='ArrowRight'){s?V.yaw+=k:V.panx+=.1;}
-  if(e.key==='ArrowUp'){s?V.pitch+=k:V.pany-=.1;}
-  if(e.key==='ArrowDown'){s?V.pitch-=k:V.pany+=.1;}
+  if(e.key==='ArrowLeft'){s?V.yaw-=k:V.panx+=.1;}
+  if(e.key==='ArrowRight'){s?V.yaw+=k:V.panx-=.1;}
+  if(e.key==='ArrowUp'){s?V.pitch+=k:V.pany+=.1;}
+  if(e.key==='ArrowDown'){s?V.pitch-=k:V.pany-=.1;}
 });
 
 /* ---------- modo edição: mostra as coordenadas do clique ---------- */
@@ -413,9 +435,9 @@ let toastT=0;
 function say(s,ms=3500){toast.textContent=s;toast.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>toast.classList.remove('on'),ms);}
 function editClick(px,py){
   let s;
-  if(!cur&&fachAsset){const c=cover(fachAsset.w,fachAsset.h,1,0,0);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
+  if(!cur&&fachAsset){const c=cover(fachAsset.w,fachAsset.h,1,0,0,fachMode());s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
   else if(cur&&TOUR.comodos[cur].tipo==='pano'){const r=unprojPano(px,py);s=`yaw: ${r.yaw.toFixed(0)}, pitch: ${r.pitch.toFixed(0)}`;}
-  else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
+  else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany,'contain');s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
   if(s){say(s,6000);console.log('[ponto]',s);try{navigator.clipboard.writeText(s)}catch(_){}}
 }
 
@@ -453,7 +475,7 @@ function showRoom(id,a,arrYaw){
   hsList=makeHs(roomHs,room.pontos);
   idleStop=false;V.vy=V.vp=V.vx=V.vyy=0;
   if(room.tipo==='pano'){V.yaw=(arrYaw!=null?arrYaw:(room.yaw||0))*D2R;V.pitch=0;easeFov();}
-  else{V.panx=0;V.pany=0;V.zoom=1.5;V.zoomT=1.15;}
+  else{V.panx=0;V.pany=0;V.zoom=1.25;V.zoomT=1;}
   roomEl.classList.add('on');setInfo(room);setNav();
 }
 async function goRoom(id){
@@ -543,6 +565,8 @@ async function startTour(){
   if(HAS_F){
     fachAsset=await getAsset('fachada',TOUR.fachada.img,drawFachadaPH);
     fachCv.width=fachAsset.w;fachCv.height=fachAsset.h;fachCv.getContext('2d').drawImage(fachAsset.im,0,0);
+    try{$('#fachBg').style.backgroundImage='url("'+(fachAsset.real?fachAsset.im.src:fachAsset.im.toDataURL())+'")';}catch(_){}
+    resize();
     fachList=makeHs(fachHs,TOUR.fachada.pontos);
   }else fachada.classList.add('in','gone');          // casa sem foto de fachada: começa direto num cômodo
   const menu=$('#menu');

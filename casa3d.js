@@ -279,7 +279,7 @@ function pMove(e){
   const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
   if(ptr.size===2&&mode==='orbit'){const [a,b]=[...ptr.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch)orb.dist=Math.max(6,Math.min(45,orb.dist*pinch/d));pinch=d;return;}
   if(mode==='orbit'){orb.yaw-=dx*.006;orb.pitch=Math.max(-1.45,Math.min(-.12,orb.pitch-dy*.005));}
-  else if(mode==='walk'){cam.yaw+=dx*.005;cam.pitch=Math.max(-1.2,Math.min(1.2,cam.pitch-dy*.004));}
+  else if(mode==='walk'){cam.yaw-=dx*.005;cam.pitch=Math.max(-1.2,Math.min(1.2,cam.pitch+dy*.004));}   // a imagem acompanha o mouse/dedo
 }
 function pUp(e){ptr.delete(e.pointerId);pinch=0;}
 function kd(e){

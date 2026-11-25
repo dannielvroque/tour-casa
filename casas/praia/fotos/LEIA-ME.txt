@@ -1,2 +1,0 @@
-Coloque aqui as fotos desta casa (fachada.jpg, sala.jpg, ...).
-Panoramas 360: proporcao 2:1 (ex.: 4096x2048). Rode tools/otimizar_fotos.py para reduzir o peso.
