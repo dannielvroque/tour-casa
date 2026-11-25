@@ -368,11 +368,13 @@ function frame(t){
     if(!dragging){V.panx+=V.vx*dt;V.pany+=V.vyy*dt;V.vx*=Math.pow(.02,dt);V.vyy*=Math.pow(.02,dt);}
     V.panx=Math.max(-1,Math.min(1,V.panx));V.pany=Math.max(-1,Math.min(1,V.pany));
     V.zoom+=(V.zoomT-V.zoom)*Math.min(1,dt*3.2);
-    const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany,'contain'),x=fotoCv.getContext('2d');   // foto inteira (zoom 1), sem cortar
+    const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany),x=fotoCv.getContext('2d');   // zoom 1 = preenche a tela; dá para olhar para qualquer canto
     x.setTransform(dpr,0,0,dpr,0,0);x.fillStyle='#000';x.fillRect(0,0,W,H);
-    if(!asset.bg){const b=document.createElement('canvas');b.width=48;b.height=Math.max(8,Math.round(48*asset.h/asset.w));b.getContext('2d').drawImage(asset.im,0,0,b.width,b.height);asset.bg=b;}
-    const cb=cover(asset.w,asset.h,1.15,0,0,'cover');                  // fundo: a própria foto, bem desfocada
-    x.imageSmoothingEnabled=true;x.drawImage(asset.bg,cb.ox,cb.oy,cb.dw,cb.dh);x.fillStyle='rgba(8,7,9,.5)';x.fillRect(0,0,W,H);
+    if(V.zoom<.999){                                                  // afastando além da tela cheia: fundo desfocado
+      if(!asset.bg){const b=document.createElement('canvas');b.width=48;b.height=Math.max(8,Math.round(48*asset.h/asset.w));b.getContext('2d').drawImage(asset.im,0,0,b.width,b.height);asset.bg=b;}
+      const cb=cover(asset.w,asset.h,1.15,0,0);
+      x.imageSmoothingEnabled=true;x.drawImage(asset.bg,cb.ox,cb.oy,cb.dw,cb.dh);x.fillStyle='rgba(8,7,9,.5)';x.fillRect(0,0,W,H);
+    }
     x.imageSmoothingQuality='high';x.drawImage(asset.im,c.ox,c.oy,c.dw,c.dh);
     for(const o of hsList)place(o,c.ox+o.p.x*c.dw,c.oy+o.p.y*c.dh,true);
   }
@@ -388,6 +390,8 @@ stage.addEventListener('pointerdown',e=>{
   if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y);}
 });
 const ptrs=new Map();let pinch0=0;                     // pinça (dois dedos) = zoom
+/* zoom mínimo das fotos comuns = enxergar a foto inteira (relativo ao "tela cheia", que é 1) */
+function minZ(){return asset?Math.min(W/asset.w,H/asset.h)/Math.max(W/asset.w,H/asset.h):1;}
 stage.addEventListener('pointermove',e=>{
   const p=ptrs.get(e.pointerId);
   if(p){p.x=e.clientX;p.y=e.clientY;}
@@ -395,7 +399,7 @@ stage.addEventListener('pointermove',e=>{
     const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
     if(pinch0){const f=pinch0/d;
       if(TOUR.comodos[cur].tipo==='pano'){V.fov=V.fovT=Math.max(35,Math.min(95,V.fov*f));}
-      else{V.zoom=V.zoomT=Math.max(1,Math.min(3,V.zoom/f));}}
+      else{V.zoom=V.zoomT=Math.max(minZ(),Math.min(3,V.zoom/f));}}
     pinch0=d;moved+=10;lx=e.clientX;ly=e.clientY;return;
   }
   if(!dragging)return;
@@ -404,7 +408,7 @@ stage.addEventListener('pointermove',e=>{
   if(TOUR.comodos[cur].tipo==='pano'){
     const k=V.fov*D2R/H;V.yaw-=dx*k;V.pitch+=dy*k;V.vy=-dx*k*60;V.vp=dy*k*60;
   }else if(asset){
-    const c=cover(asset.w,asset.h,V.zoom,0,0,'contain'),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
+    const c=cover(asset.w,asset.h,V.zoom,0,0),rx=Math.max(1,(c.dw-W)/2),ry=Math.max(1,(c.dh-H)/2);
     V.panx+=dx/rx;V.pany+=dy/ry;V.vx=dx/rx*30;V.vyy=dy/ry*30;      // a imagem acompanha o dedo/mouse
   }
 });
@@ -417,7 +421,7 @@ stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercance
 stage.addEventListener('wheel',e=>{
   if(!cur)return;e.preventDefault();
   if(TOUR.comodos[cur].tipo==='pano')V.fovT=Math.max(35,Math.min(95,V.fovT*(1+e.deltaY*.001)));
-  else V.zoomT=Math.max(1,Math.min(3,V.zoomT*(1-e.deltaY*.001)));
+  else V.zoomT=Math.max(minZ(),Math.min(3,V.zoomT*(1-e.deltaY*.001)));
 },{passive:false});
 addEventListener('keydown',e=>{
   if(e.key==='Escape'){back();return;}
@@ -437,7 +441,7 @@ function editClick(px,py){
   let s;
   if(!cur&&fachAsset){const c=cover(fachAsset.w,fachAsset.h,1,0,0,fachMode());s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
   else if(cur&&TOUR.comodos[cur].tipo==='pano'){const r=unprojPano(px,py);s=`yaw: ${r.yaw.toFixed(0)}, pitch: ${r.pitch.toFixed(0)}`;}
-  else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany,'contain');s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
+  else if(cur&&asset){const c=cover(asset.w,asset.h,V.zoom,V.panx,V.pany);s=`x: ${((px-c.ox)/c.dw).toFixed(3)}, y: ${((py-c.oy)/c.dh).toFixed(3)}`;}
   if(s){say(s,6000);console.log('[ponto]',s);try{navigator.clipboard.writeText(s)}catch(_){}}
 }
 
@@ -475,7 +479,7 @@ function showRoom(id,a,arrYaw){
   hsList=makeHs(roomHs,room.pontos);
   idleStop=false;V.vy=V.vp=V.vx=V.vyy=0;
   if(room.tipo==='pano'){V.yaw=(arrYaw!=null?arrYaw:(room.yaw||0))*D2R;V.pitch=0;easeFov();}
-  else{V.panx=0;V.pany=0;V.zoom=1.25;V.zoomT=1;}
+  else{V.panx=0;V.pany=0;V.zoom=1.2;V.zoomT=1;}
   roomEl.classList.add('on');setInfo(room);setNav();
 }
 async function goRoom(id){
